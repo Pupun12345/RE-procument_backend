@@ -1,0 +1,35 @@
+const mongoose = require("mongoose");
+
+const EmployeeSchema = new mongoose.Schema(
+  {
+    employeeName: { type: String, required: true },
+    employeeCode: { type: String, required: true, unique: true },
+    designation: String,
+
+    emailId: { type: String, required: true },
+    mobileNumber: { type: String, required: true },
+
+    panCardNumber: String,
+    aadharCardNumber: String,
+    safetyPassNumber: String,
+
+    emergencyContactNumber: String,
+
+    dateOfJoining: { type: Date, required: true },
+    dateOfBirth: Date,
+
+    fatherName: String,
+    fatherContactNumber: String,
+
+    bankName: String,
+    bankAccountNumber: String,
+    bankIfscCode: String,
+
+    address: { type: String, required: true },
+
+    employeePhoto: String, // file path
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("Employee", EmployeeSchema);
