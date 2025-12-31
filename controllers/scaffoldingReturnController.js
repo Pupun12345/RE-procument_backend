@@ -139,3 +139,82 @@ exports.deleteScaffoldingReturn = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+/* ================= UPDATE RETURN (EDIT) ================= */
+exports.updateScaffoldingReturn = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+    const {
+      woNumber,
+      personName,
+      location,
+      supervisorName = "",
+      tslName = "",
+      returnDate,
+      items,
+    } = req.body;
+
+    if (!personName || !location) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Invalid update data" });
+    }
+
+    // 1️⃣ Find old return
+    const oldReturn = await ScaffoldingReturn.findById(id).session(session);
+    if (!oldReturn) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Return not found" });
+    }
+
+    // 2️⃣ ONLY touch stock & items if items are provided
+    if (Array.isArray(items) && items.length > 0) {
+      // 🔻 rollback OLD stock
+      for (const oldItem of oldReturn.items) {
+        await ScaffoldingStock.findOneAndUpdate(
+          { itemName: { $regex: `^${oldItem.itemName}$`, $options: "i" } },
+          { $inc: { qty: -oldItem.quantity } },
+          { session }
+        );
+      }
+
+      // 🔺 apply NEW stock
+      for (const newItem of items) {
+        await ScaffoldingStock.findOneAndUpdate(
+          { itemName: { $regex: `^${newItem.itemName}$`, $options: "i" } },
+          { $inc: { qty: newItem.quantity } },
+          { session }
+        );
+      }
+
+      // update items ONLY here
+      oldReturn.items = items;
+    }
+
+    // 3️⃣ Always update non-item fields
+    oldReturn.woNumber = woNumber;
+    oldReturn.personName = personName;
+    oldReturn.location = location;
+    oldReturn.supervisorName = supervisorName;
+    oldReturn.tslName = tslName;
+    oldReturn.returnDate = returnDate;
+
+    await oldReturn.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({
+      message: "Scaffolding return updated successfully",
+      data: oldReturn,
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("UPDATE RETURN ERROR:", err);
+    res.status(500).json({ message: "Update failed" });
+  }
+};
