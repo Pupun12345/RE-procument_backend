@@ -76,3 +76,61 @@ exports.deletePurchase = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+/* ================= UPDATE PURCHASE ================= */
+exports.updatePurchase = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1️⃣ Find existing purchase
+    const existingPurchase = await ScaffoldingPurchase.findById(id);
+    if (!existingPurchase) {
+      return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    // 2️⃣ ROLLBACK OLD STOCK
+    for (const item of existingPurchase.items) {
+      const itemName = item.itemName || item.name;
+      const qty = Number(item.qty || item.quantity || 0);
+
+      if (!itemName || qty === 0) continue;
+
+      await ScaffoldingStock.findOneAndUpdate(
+        { itemName },
+        { $inc: { qty: -qty } }
+      );
+    }
+
+    // 3️⃣ APPLY NEW STOCK
+    for (const item of req.body.items || []) {
+      const itemName = item.itemName || item.name;
+      const qty = Number(item.qty || item.quantity || 0);
+      const unit = item.unit || item.uom || "-";
+
+      if (!itemName || qty === 0) continue;
+
+      await ScaffoldingStock.findOneAndUpdate(
+        { itemName },
+        {
+          $inc: { qty },
+          $setOnInsert: { unit },
+        },
+        { upsert: true }
+      );
+    }
+
+    // 4️⃣ UPDATE PURCHASE DOCUMENT
+    const updatedPurchase = await ScaffoldingPurchase.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
+
+    res.json(updatedPurchase);
+  } catch (err) {
+    console.error("UPDATE SCAFFOLDING ERROR:", err);
+    res.status(500).json({
+      message: "Failed to update Scaffolding purchase",
+      error: err.message,
+    });
+  }
+};

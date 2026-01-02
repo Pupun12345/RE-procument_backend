@@ -5,5 +5,5 @@ const controller = require("../../controllers/mechanicalPurchaseController");
 router.post("/", controller.createPurchase);
 router.get("/", controller.getPurchases);
 router.delete("/:id", controller.deletePurchase);
-
+router.put("/:id", controller.updatePurchase);
 module.exports = router;

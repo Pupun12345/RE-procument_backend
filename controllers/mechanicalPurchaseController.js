@@ -89,3 +89,74 @@ exports.deletePurchase = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+/* ================= UPDATE PURCHASE ================= */
+exports.updatePurchase = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      partyName,
+      invoiceNumber,
+      invoiceDate,
+      items,
+      subtotal,
+      gstPercent,
+      gstAmount,
+      total,
+    } = req.body;
+
+    if (!partyName || !invoiceNumber || !invoiceDate || !items?.length) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // 1️⃣ Find existing purchase
+    const existingPurchase = await MECHANICALPurchase.findById(id);
+    if (!existingPurchase) {
+      return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    // 2️⃣ ROLLBACK OLD STOCK
+    for (const item of existingPurchase.items) {
+      await Stock.findOneAndUpdate(
+        { itemName: item.itemName },
+        { $inc: { qty: -Number(item.qty) } }
+      );
+    }
+
+    // 3️⃣ APPLY NEW STOCK
+    for (const item of items) {
+      await Stock.findOneAndUpdate(
+        { itemName: item.itemName },
+        {
+          $inc: { qty: Number(item.qty) },
+          $setOnInsert: { unit: item.unit },
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 4️⃣ UPDATE PURCHASE
+    const updatedPurchase = await MECHANICALPurchase.findByIdAndUpdate(
+      id,
+      {
+        partyName,
+        invoiceNumber,
+        invoiceDate,
+        items,
+        subtotal,
+        gstPercent,
+        gstAmount,
+        total,
+      },
+      { new: true }
+    );
+
+    res.json(updatedPurchase);
+  } catch (err) {
+    console.error("UPDATE MECHANICAL ERROR:", err);
+    res.status(500).json({
+      message: "Failed to update MECHANICAL purchase",
+      error: err.message,
+    });
+  }
+};

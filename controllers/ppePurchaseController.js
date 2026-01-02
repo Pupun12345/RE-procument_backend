@@ -127,3 +127,77 @@ exports.deletePurchase = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+/* ================= UPDATE PURCHASE ================= */
+exports.updatePurchase = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      partyName,
+      invoiceNumber,
+      invoiceDate,
+      items,
+      subtotal,
+      gstPercent,
+      gstAmount,
+      total,
+    } = req.body;
+
+    const existingPurchase = await PPEPurchase.findById(id);
+    if (!existingPurchase) {
+      return res.status(404).json({ message: "Purchase not found" });
+    }
+
+    // 🔄 Rollback old stock
+    for (const item of existingPurchase.items) {
+      await Stock.findOneAndUpdate(
+        { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
+        { $inc: { qty: -Number(item.qty) } }
+      );
+    }
+
+    // ✅ Sanitize new items
+    const cleanItems = items
+      .filter(i => i.itemName && Number(i.qty) > 0 && i.unit)
+      .map(i => ({
+        itemName: i.itemName.trim(),
+        unit: i.unit,
+        qty: Number(i.qty),
+        rate: Number(i.rate || 0),
+        amount: Number(i.amount || 0),
+      }));
+
+    // 🔄 Apply new stock
+    for (const item of cleanItems) {
+      await Stock.findOneAndUpdate(
+        { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
+        {
+          $inc: { qty: item.qty },
+          $setOnInsert: { unit: item.unit },
+        },
+        { upsert: true }
+      );
+    }
+
+    // 💾 Update purchase
+    const updatedPurchase = await PPEPurchase.findByIdAndUpdate(
+      id,
+      {
+        partyName,
+        invoiceNumber,
+        invoiceDate,
+        items: cleanItems,
+        subtotal,
+        gstPercent,
+        gstAmount,
+        total,
+      },
+      { new: true }
+    );
+
+    res.json(updatedPurchase);
+  } catch (err) {
+    console.error("UPDATE PPE ERROR:", err);
+    res.status(500).json({ message: "Failed to update purchase" });
+  }
+};
