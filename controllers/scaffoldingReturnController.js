@@ -47,16 +47,26 @@ exports.createScaffoldingReturn = async (req, res) => {
     }
 
     // 🔺 Increase stock (RETURN = IN)
+    // 🔺 Increase stock (RETURN = IN)
     for (const item of items) {
+      const stock = await ScaffoldingStock.findOne({
+        itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+      }).session(session);
+
+      if (!stock) continue;
+
+      const qty = Number(item.quantity);
+      const weight = qty * stock.puw;
+
       await ScaffoldingStock.findOneAndUpdate(
+        { itemName: stock.itemName },
         {
-          itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+          $inc: {
+            qty: qty,
+            weight: weight, // ✅ INCREASE WEIGHT
+          },
         },
-        {
-          $inc: { qty: item.quantity },
-          $setOnInsert: { unit: item.unit },
-        },
-        { upsert: true, session }
+        { session }
       );
     }
 
@@ -117,11 +127,23 @@ exports.deleteScaffoldingReturn = async (req, res) => {
 
     // 🔄 Rollback stock
     for (const item of record.items) {
+      const stock = await ScaffoldingStock.findOne({
+        itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+      }).session(session);
+
+      if (!stock) continue;
+
+      const qty = Number(item.quantity);
+      const weight = qty * stock.puw;
+
       await ScaffoldingStock.findOneAndUpdate(
+        { itemName: stock.itemName },
         {
-          itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+          $inc: {
+            qty: -qty,
+            weight: -weight, // ✅ ROLLBACK WEIGHT
+          },
         },
-        { $inc: { qty: -item.quantity } },
         { session }
       );
     }
@@ -174,18 +196,46 @@ exports.updateScaffoldingReturn = async (req, res) => {
     if (Array.isArray(items) && items.length > 0) {
       // 🔻 rollback OLD stock
       for (const oldItem of oldReturn.items) {
+        const stock = await ScaffoldingStock.findOne({
+          itemName: { $regex: `^${oldItem.itemName}$`, $options: "i" },
+        }).session(session);
+
+        if (!stock) continue;
+
+        const qty = Number(oldItem.quantity);
+        const weight = qty * stock.puw;
+
         await ScaffoldingStock.findOneAndUpdate(
-          { itemName: { $regex: `^${oldItem.itemName}$`, $options: "i" } },
-          { $inc: { qty: -oldItem.quantity } },
+          { itemName: stock.itemName },
+          {
+            $inc: {
+              qty: -qty,
+              weight: -weight,
+            },
+          },
           { session }
         );
       }
 
       // 🔺 apply NEW stock
       for (const newItem of items) {
+        const stock = await ScaffoldingStock.findOne({
+          itemName: { $regex: `^${newItem.itemName}$`, $options: "i" },
+        }).session(session);
+
+        if (!stock) continue;
+
+        const qty = Number(newItem.quantity);
+        const weight = qty * stock.puw;
+
         await ScaffoldingStock.findOneAndUpdate(
-          { itemName: { $regex: `^${newItem.itemName}$`, $options: "i" } },
-          { $inc: { qty: newItem.quantity } },
+          { itemName: stock.itemName },
+          {
+            $inc: {
+              qty: qty,
+              weight: weight,
+            },
+          },
           { session }
         );
       }

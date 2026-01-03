@@ -8,21 +8,30 @@ exports.createPurchase = async (req, res) => {
 
     // 2️⃣ UPDATE STOCK
     for (const item of purchase.items) {
-      const itemName = item.itemName || item.name;
-      const qty = Number(item.qty || item.quantity || 0);
-      const unit = item.unit || item.uom || "-";
+  const itemName = item.itemName || item.name;
+  const qty = Number(item.qty || 0);
+  const unit = item.unit || item.uom || "-";
+  const puw = Number(item.puw || 0);
+  const weight = qty * puw;
 
-      if (!itemName || qty === 0) continue;
+  if (!itemName || qty === 0 || puw === 0) continue;
 
-      await ScaffoldingStock.findOneAndUpdate(
-        { itemName },
-        {
-          $inc: { qty },
-          $setOnInsert: { unit },
-        },
-        { upsert: true }
-      );
-    }
+  await ScaffoldingStock.findOneAndUpdate(
+    { itemName },
+    {
+      $inc: {
+        qty,
+        weight,          // ✅ UPDATE WEIGHT
+      },
+      $setOnInsert: {
+        unit,
+        puw,             // ✅ STORE PUW ONCE
+      },
+    },
+    { upsert: true }
+  );
+}
+
 
     res.status(201).json(purchase);
   } catch (err) {
@@ -57,16 +66,24 @@ exports.deletePurchase = async (req, res) => {
 
     // 🔻 Reduce stock
     for (const item of purchase.items) {
-      const itemName = item.itemName || item.name;
-      const qty = Number(item.qty || item.quantity || 0);
+  const itemName = item.itemName || item.name;
+  const qty = Number(item.qty || 0);
+  const puw = Number(item.puw || 0);
+  const weight = qty * puw;
 
-      if (!itemName || qty === 0) continue;
+  if (!itemName || qty === 0 || puw === 0) continue;
 
-      await ScaffoldingStock.findOneAndUpdate(
-        { itemName },
-        { $inc: { qty: -qty } }
-      );
+  await ScaffoldingStock.findOneAndUpdate(
+    { itemName },
+    {
+      $inc: {
+        qty: -qty,
+        weight: -weight,   // ✅ ROLLBACK WEIGHT
+      },
     }
+  );
+}
+
 
     await ScaffoldingPurchase.findByIdAndDelete(req.params.id);
 
@@ -87,38 +104,53 @@ exports.updatePurchase = async (req, res) => {
       return res.status(404).json({ message: "Purchase not found" });
     }
 
-    // 2️⃣ ROLLBACK OLD STOCK
+    /* ================= ROLLBACK OLD STOCK ================= */
     for (const item of existingPurchase.items) {
       const itemName = item.itemName || item.name;
-      const qty = Number(item.qty || item.quantity || 0);
+      const qty = Number(item.qty || 0);
+      const puw = Number(item.puw || 0);
+      const weight = qty * puw;
 
-      if (!itemName || qty === 0) continue;
-
-      await ScaffoldingStock.findOneAndUpdate(
-        { itemName },
-        { $inc: { qty: -qty } }
-      );
-    }
-
-    // 3️⃣ APPLY NEW STOCK
-    for (const item of req.body.items || []) {
-      const itemName = item.itemName || item.name;
-      const qty = Number(item.qty || item.quantity || 0);
-      const unit = item.unit || item.uom || "-";
-
-      if (!itemName || qty === 0) continue;
+      if (!itemName || qty === 0 || puw === 0) continue;
 
       await ScaffoldingStock.findOneAndUpdate(
         { itemName },
         {
-          $inc: { qty },
-          $setOnInsert: { unit },
+          $inc: {
+            qty: -qty,
+            weight: -weight, // ✅ rollback weight
+          },
+        }
+      );
+    }
+
+    /* ================= APPLY NEW STOCK ================= */
+    for (const item of req.body.items || []) {
+      const itemName = item.itemName || item.name;
+      const qty = Number(item.qty || 0);
+      const unit = item.unit || item.uom || "-";
+      const puw = Number(item.puw || 0);
+      const weight = qty * puw;
+
+      if (!itemName || qty === 0 || puw === 0) continue;
+
+      await ScaffoldingStock.findOneAndUpdate(
+        { itemName },
+        {
+          $inc: {
+            qty,
+            weight, // ✅ apply weight
+          },
+          $setOnInsert: {
+            unit,
+            puw, // ✅ store PUW once
+          },
         },
         { upsert: true }
       );
     }
 
-    // 4️⃣ UPDATE PURCHASE DOCUMENT
+    /* ================= UPDATE PURCHASE ================= */
     const updatedPurchase = await ScaffoldingPurchase.findByIdAndUpdate(
       id,
       req.body,
@@ -134,3 +166,4 @@ exports.updatePurchase = async (req, res) => {
     });
   }
 };
+

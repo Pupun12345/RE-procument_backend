@@ -8,6 +8,11 @@ const scaffoldingItemSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    puw: {
+      type: Number,          // ✅ must be Number
+      required: true,
+      min: 0,
+    },
     unit: {
       type: String,
       required: true,

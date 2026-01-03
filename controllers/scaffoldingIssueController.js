@@ -4,35 +4,23 @@ const ScaffoldingStock = require("../models/scaffolding/Stock");
 // controllers/scaffoldingIssueController.js
 exports.createIssue = async (req, res) => {
   try {
-    const {
-      issuedTo,
-      issueDate,
-      location,
-      woNumber,
-      supervisorName,
-      tslName,
-      items,
-    } = req.body;
+    const issue = await ScaffoldingIssue.create(req.body);
 
-    if (!issuedTo || !issueDate || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "Invalid issue data" });
-    }
+    for (const item of req.body.items) {
+      const stock = await ScaffoldingStock.findOne({ itemName: item.itemName });
+      if (!stock) continue;
 
-    const issue = await ScaffoldingIssue.create({
-      issuedTo,
-      issueDate,
-      location,
-      woNumber,
-      supervisorName,
-      tslName,
-      items,
-    });
+      const issuedQty = Number(item.qty);
+      const issuedWeight = issuedQty * stock.puw;
 
-    // update stock for each item
-    for (const item of items) {
       await ScaffoldingStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { qty: -item.qty } }
+        {
+          $inc: {
+            qty: -issuedQty,
+            weight: -issuedWeight,
+          },
+        }
       );
     }
 
@@ -42,6 +30,7 @@ exports.createIssue = async (req, res) => {
     res.status(500).json({ message: "Failed to issue items" });
   }
 };
+
 
 
 /* ================= GET ISSUES ================= */
@@ -58,26 +47,32 @@ exports.getIssues = async (req, res) => {
 exports.deleteIssue = async (req, res) => {
   try {
     const issue = await ScaffoldingIssue.findById(req.params.id);
-    if (!issue) {
-      return res.status(404).json({ message: "Issue not found" });
-    }
+    if (!issue) return res.status(404).json({ message: "Issue not found" });
 
-    // restore stock for each item
     for (const item of issue.items) {
+      const stock = await ScaffoldingStock.findOne({ itemName: item.itemName });
+      if (!stock) continue;
+
+      const restoreWeight = item.qty * stock.puw;
+
       await ScaffoldingStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { qty: item.qty } }
+        {
+          $inc: {
+            qty: item.qty,
+            weight: restoreWeight,
+          },
+        }
       );
     }
 
-    await ScaffoldingIssue.findByIdAndDelete(req.params.id);
-
+    await issue.deleteOne();
     res.json({ message: "Issue deleted & stock restored" });
   } catch (err) {
-    console.error("DELETE ISSUE ERROR:", err);
     res.status(500).json({ message: "Delete failed" });
   }
 };
+
 
 /* ================= UPDATE ISSUE (EDIT) ================= */
 exports.updateIssue = async (req, res) => {
@@ -103,29 +98,56 @@ exports.updateIssue = async (req, res) => {
       return res.status(404).json({ message: "Issue not found" });
     }
 
-    // 2️⃣ ONLY update stock & items if items are provided and not empty
-    if (Array.isArray(items) && items.length > 0) {
-      // restore OLD stock
+    /* ================= ROLLBACK OLD STOCK ================= */
+    if (Array.isArray(oldIssue.items)) {
       for (const oldItem of oldIssue.items) {
+        const stock = await ScaffoldingStock.findOne({
+          itemName: oldItem.itemName,
+        });
+        if (!stock) continue;
+
+        const qty = Number(oldItem.qty);
+        const weight = qty * stock.puw;
+
         await ScaffoldingStock.findOneAndUpdate(
           { itemName: oldItem.itemName },
-          { $inc: { qty: oldItem.qty } }
+          {
+            $inc: {
+              qty: qty,
+              weight: weight,
+            },
+          }
         );
       }
+    }
 
-      // deduct NEW stock
+    /* ================= APPLY NEW STOCK ================= */
+    if (Array.isArray(items) && items.length > 0) {
       for (const newItem of items) {
+        const stock = await ScaffoldingStock.findOne({
+          itemName: newItem.itemName,
+        });
+        if (!stock) continue;
+
+        const qty = Number(newItem.qty);
+        const weight = qty * stock.puw;
+
         await ScaffoldingStock.findOneAndUpdate(
           { itemName: newItem.itemName },
-          { $inc: { qty: -newItem.qty } }
+          {
+            $inc: {
+              qty: -qty,
+              weight: -weight,
+            },
+          }
         );
       }
 
-      // update items ONLY here
+      // update items only after stock is correct
       oldIssue.items = items;
     }
 
-    // 3️⃣ Always update non-item fields
+    /* ================= UPDATE OTHER FIELDS ================= */
     oldIssue.issuedTo = issuedTo;
     oldIssue.issueDate = issueDate;
     oldIssue.location = location;
@@ -144,4 +166,5 @@ exports.updateIssue = async (req, res) => {
     res.status(500).json({ message: "Update failed" });
   }
 };
+
 

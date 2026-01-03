@@ -28,7 +28,7 @@ exports.getItems = async (req, res) => {
 // CREATE item
 exports.createItem = async (req, res) => {
   const { type } = req.params;
-  const { itemName, unit } = req.body;
+  const { itemName, unit, puw } = req.body;
   const Model = modelMap[type];
 
   if (!Model) {
@@ -45,7 +45,7 @@ exports.createItem = async (req, res) => {
       return res.status(409).json({ message: "Item already exists" });
     }
 
-    const item = await Model.create({ itemName, unit });
+    const item = await Model.create({ itemName, unit, puw: Number(puw), });
     res.status(201).json({ success: true, item });
   } catch (err) {
     res.status(500).json({ message: "Failed to create item" });
