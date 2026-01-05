@@ -4,16 +4,26 @@ const ScaffoldingStock = require("../models/scaffolding/Stock");
 // controllers/scaffoldingIssueController.js
 exports.createIssue = async (req, res) => {
   try {
-    const issue = await ScaffoldingIssue.create(req.body);
+    // 🔥 Normalize items BEFORE saving
+    const normalizedItems = req.body.items.map(item => ({
+      ...item,
+      returnedQty: 0,
+      returnedWeight: 0,
+    }));
 
-    for (const item of req.body.items) {
+    const issue = await ScaffoldingIssue.create({
+      ...req.body,
+      items: normalizedItems,
+    });
+
+    for (const item of normalizedItems) {
       const stock = await ScaffoldingStock.findOne({ itemName: item.itemName });
       if (!stock) continue;
 
       const issuedQty = Number(item.qty);
       const issuedWeight = issuedQty * stock.puw;
 
-      await ScaffoldingStock.findOneAndUpdate(
+      await ScaffoldingStock.updateOne(
         { itemName: item.itemName },
         {
           $inc: {
@@ -26,10 +36,10 @@ exports.createIssue = async (req, res) => {
 
     res.status(201).json(issue);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to issue items" });
   }
 };
+
 
 
 

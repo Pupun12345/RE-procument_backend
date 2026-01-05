@@ -1,13 +1,14 @@
 const mongoose = require("mongoose");
 
-const ItemSchema = new mongoose.Schema(
-  {
-    itemName: { type: String, required: true },
-    qty: { type: Number, required: true },
-    unit: { type: String, required: true },
-  },
-  { _id: false }
-);
+const ItemSchema = new mongoose.Schema({
+  itemName: { type: String, required: true },
+  unit: { type: String, required: true },
+
+  issuedQty: { type: Number, required: true },
+  returnedQty: { type: Number, default: 0 }, // 🔥 TRACK RETURN
+
+}, { _id: false });
+
 
 const IssueSchema = new mongoose.Schema(
   {

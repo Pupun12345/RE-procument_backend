@@ -11,19 +11,26 @@ const ScaffoldingReturnItemSchema = new mongoose.Schema(
 
 const ScaffoldingReturnSchema = new mongoose.Schema(
   {
-    woNumber: String,
-    personName: { type: String, required: true },
-    location: { type: String, required: true },
+    issueId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ScaffoldingIssue",
+      required: true,
+    },
 
+    personName: String,
+    location: String,
+
+    // ✅ ADD THESE FIELDS
+    woNumber: { type: String, default: "" },
     supervisorName: { type: String, default: "" },
     tslName: { type: String, default: "" },
 
     returnDate: { type: Date, default: Date.now },
-    items: { type: [ScaffoldingReturnItemSchema], required: true },
+
+    items: [ScaffoldingReturnItemSchema],
   },
   { timestamps: true }
 );
-
 
 module.exports = mongoose.model(
   "ScaffoldingReturn",

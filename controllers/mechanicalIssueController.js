@@ -15,11 +15,12 @@ exports.createIssue = async (req, res) => {
     }
 
     const cleanItems = items
-      .filter(i => i.itemName && Number(i.qty) > 0 && i.unit)
-      .map(i => ({
+      .filter((i) => i.itemName && Number(i.issuedQty) > 0 && i.unit)
+      .map((i) => ({
         itemName: i.itemName.trim(),
-        qty: Number(i.qty),
         unit: i.unit,
+        issuedQty: Number(i.issuedQty), // 🔥 FIX HERE
+        returnedQty: 0,
       }));
 
     if (cleanItems.length === 0) {
@@ -32,7 +33,7 @@ exports.createIssue = async (req, res) => {
         itemName: { $regex: `^${item.itemName}$`, $options: "i" },
       });
 
-      if (!stock || stock.qty < item.qty) {
+      if (!stock || stock.issuedQty < item.issuedQty) {
         return res.status(400).json({
           message: `Insufficient stock for ${item.itemName}`,
         });
@@ -48,8 +49,8 @@ exports.createIssue = async (req, res) => {
 
     for (const item of cleanItems) {
       await MechanicalStock.findOneAndUpdate(
-        { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
-        { $inc: { qty: -item.qty } }
+        { itemName: item.itemName },
+        { $inc: { issuedQty: -item.issuedQty } }
       );
     }
 
@@ -104,7 +105,7 @@ exports.deleteIssue = async (req, res) => {
     for (const item of issue.items) {
       await MechanicalStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { qty: item.qty } }
+        { $inc: { issuedQty: item.issuedQty } }
       );
     }
 

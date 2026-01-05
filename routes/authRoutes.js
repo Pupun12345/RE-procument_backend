@@ -1,10 +1,19 @@
 const express = require("express");
-const { login, logout, register } = require("../controllers/authController");
+const { login, logout, register, forgotPassword, resetPassword} = require("../controllers/authController");
+const auth = require("../middleware/auth");
+const adminOnly = require("../middleware/adminOnly");
 
 const router = express.Router();
 
-router.post("/register", register);
+// ✅ ADMIN ONLY
+router.post("/register", auth, adminOnly, register);
+
+// ✅ PUBLIC
 router.post("/login", login);
-router.post("/logout", logout);
+
+// ✅ AUTHENTICATED
+router.post("/logout", auth, logout);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 module.exports = router;

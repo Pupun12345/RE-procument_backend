@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const ScaffoldingReturn = require("../models/scaffolding/Return");
 const ScaffoldingStock = require("../models/scaffolding/Stock");
+const ScaffoldingIssue = require("../models/scaffolding/Issue");
 
 /* ================= CREATE RETURN ================= */
 exports.createScaffoldingReturn = async (req, res) => {
@@ -8,93 +9,67 @@ exports.createScaffoldingReturn = async (req, res) => {
   session.startTransaction();
 
   try {
-    const {
-      woNumber,
-      personName,
-      location,
-      supervisorName = "",
-      tslName = "",
-      returnDate,
-      items,
-    } = req.body;
+    const { issueId, items } = req.body;
 
-    // 🔐 Basic validation
-    if (
-      !personName ||
-      !location ||
-      !Array.isArray(items) ||
-      items.length === 0
-    ) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ message: "Invalid return data" });
-    }
+    const issue = await ScaffoldingIssue.findById(issueId).session(session);
+    if (!issue) throw new Error("Issue not found");
 
-    // 🔐 Validate items
     for (const item of items) {
-      if (
-        !item.itemName ||
-        !item.unit ||
-        typeof item.quantity !== "number" ||
-        item.quantity <= 0
-      ) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          message: "Invalid item data in return",
-        });
+const issueItem = issue.items.find(
+  (i) =>
+    i.itemName.trim().toLowerCase() ===
+    item.itemName.trim().toLowerCase()
+);
+
+      if (!issueItem) {
+        throw new Error(`${item.itemName} not found in issue`);
       }
-    }
 
-    // 🔺 Increase stock (RETURN = IN)
-    // 🔺 Increase stock (RETURN = IN)
-    for (const item of items) {
+      const issuedQty = Number(issueItem.qty);
+      const returnedQty = Number(issueItem.returnedQty || 0);
+      const returnQty = Number(item.quantity);
+
+      const remainingQty = issuedQty - returnedQty;
+
+      // 🔒 HARD BLOCK
+      if (returnQty <= 0 || returnQty > remainingQty) {
+        throw new Error(`Return exceeds issued qty for ${item.itemName}`);
+      }
+
       const stock = await ScaffoldingStock.findOne({
-        itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+        itemName: item.itemName,
       }).session(session);
 
-      if (!stock) continue;
+      const returnWeight = returnQty * stock.puw;
 
-      const qty = Number(item.quantity);
-      const weight = qty * stock.puw;
-
-      await ScaffoldingStock.findOneAndUpdate(
-        { itemName: stock.itemName },
+      // 🔺 Update stock
+      await ScaffoldingStock.updateOne(
+        { itemName: item.itemName },
         {
           $inc: {
-            qty: qty,
-            weight: weight, // ✅ INCREASE WEIGHT
+            qty: returnQty,
+            weight: returnWeight,
           },
         },
         { session }
       );
+
+      // 🔺 Update issue tracking
+      issueItem.returnedQty += returnQty;
+      issueItem.returnedWeight += returnWeight;
     }
 
-    // 💾 Save return record
-    const [saved] = await ScaffoldingReturn.create(
-      [
-        {
-          woNumber,
-          personName,
-          location,
-          supervisorName,
-          tslName,
-          returnDate,
-          items,
-        },
-      ],
-      { session }
-    );
+    await issue.save({ session });
+    await ScaffoldingReturn.create([req.body], { session });
 
     await session.commitTransaction();
     session.endSession();
 
-    res.status(201).json(saved);
+    res.status(201).json({ message: "Return successful" });
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    console.error("SCAFFOLDING RETURN ERROR:", err);
-    res.status(500).json({ message: "Failed to save scaffolding return" });
+    res.status(400).json({ message: err.message });
   }
 };
 
@@ -127,25 +102,38 @@ exports.deleteScaffoldingReturn = async (req, res) => {
 
     // 🔄 Rollback stock
     for (const item of record.items) {
-      const stock = await ScaffoldingStock.findOne({
-        itemName: { $regex: `^${item.itemName}$`, $options: "i" },
-      }).session(session);
+      const issue = await ScaffoldingIssue.findById(record.issueId).session(
+        session
+      );
+      if (!issue) continue;
 
-      if (!stock) continue;
+const issueItem = issue.items.find(
+  (i) =>
+    i.itemName.trim().toLowerCase() ===
+    item.itemName.trim().toLowerCase()
+);
+      if (!issueItem) continue;
 
       const qty = Number(item.quantity);
+      const stock = await ScaffoldingStock.findOne({
+        itemName: item.itemName,
+      }).session(session);
       const weight = qty * stock.puw;
 
-      await ScaffoldingStock.findOneAndUpdate(
-        { itemName: stock.itemName },
+      // 🔄 rollback issue
+      issueItem.returnedQty -= qty;
+      issueItem.returnedWeight -= weight;
+
+      // 🔄 rollback stock
+      await ScaffoldingStock.updateOne(
+        { itemName: item.itemName },
         {
-          $inc: {
-            qty: -qty,
-            weight: -weight, // ✅ ROLLBACK WEIGHT
-          },
+          $inc: { qty: -qty, weight: -weight },
         },
         { session }
       );
+
+      await issue.save({ session });
     }
 
     await record.deleteOne({ session });
