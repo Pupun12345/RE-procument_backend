@@ -32,13 +32,6 @@ mongoose
         password: await bcrypt.hash("Accounts#1982", 10),
         role: "user",
       },
-      {
-        firstname: "Tester",
-        lastname: "User3",
-        email: "mohapatraanimesh69@gmail.com",
-        password: await bcrypt.hash("rubu1234", 10),
-        role: "user",
-      },
     ];
 
     await User.insertMany(users);
