@@ -4,6 +4,11 @@ const EmployeeSchema = new mongoose.Schema(
   {
     employeeName: { type: String, required: true },
     employeeCode: { type: String, required: true, unique: true },
+    spNumber: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     designation: String,
 
     emailId: { type: String, required: true },
@@ -24,6 +29,15 @@ const EmployeeSchema = new mongoose.Schema(
     bankName: String,
     bankAccountNumber: String,
     bankIfscCode: String,
+    epfoNumber: {
+      type: String,
+      trim: true,
+    },
+
+    esiNumber: {
+      type: String,
+      trim: true,
+    },
 
     address: { type: String, required: true },
 

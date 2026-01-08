@@ -6,6 +6,7 @@ exports.createEmployee = async (req, res) => {
     const {
       employeeName,
       employeeCode,
+      spNumber,
       designation,
       emailId,
       mobileNumber,
@@ -20,6 +21,8 @@ exports.createEmployee = async (req, res) => {
       bankName,
       bankAccountNumber,
       bankIfscCode,
+      epfoNumber,
+      esiNumber,
       address,
     } = req.body;
 
@@ -27,6 +30,8 @@ exports.createEmployee = async (req, res) => {
     if (
       !employeeName ||
       !employeeCode ||
+      !spNumber ||
+      !designation ||
       !emailId ||
       !mobileNumber ||
       !dateOfJoining ||
@@ -41,10 +46,19 @@ exports.createEmployee = async (req, res) => {
       return res.status(409).json({ message: "Employee code already exists" });
     }
 
+    // 🚫 Prevent duplicate SP Number
+    const spExists = await Employee.findOne({ spNumber });
+    if (spExists) {
+      return res.status(409).json({ message: "SP Number already exists" });
+    }
+
+    const finalDesignation = designation.trim();
+
     const employee = await Employee.create({
       employeeName,
       employeeCode,
-      designation,
+      spNumber,
+      designation: finalDesignation,
       emailId,
       mobileNumber,
       panCardNumber,
@@ -58,8 +72,12 @@ exports.createEmployee = async (req, res) => {
       bankName,
       bankAccountNumber,
       bankIfscCode,
+      epfoNumber,
+      esiNumber,
       address,
-      employeePhoto: req.file ? `/uploads/employees/${req.file.filename}` : "",
+      employeePhoto: req.file
+        ? `/uploads/employees/${req.file.filename}`
+        : "",
     });
 
     res.status(201).json(employee);
@@ -68,6 +86,7 @@ exports.createEmployee = async (req, res) => {
     res.status(500).json({ message: "Failed to register employee" });
   }
 };
+
 
 /* ================= GET EMPLOYEES ================= */
 exports.getEmployees = async (req, res) => {
