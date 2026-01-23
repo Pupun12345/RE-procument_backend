@@ -4,6 +4,9 @@ const MechanicalStock = require("../models/mechanical/Stock");
 /* ================= CREATE ================= */
 exports.createIssue = async (req, res) => {
   try {
+    console.log("=== CREATE ISSUE REQUEST ===");
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+    
     const { issuedTo, issueDate, location, items } = req.body;
 
     if (!issuedTo || !issueDate) {
@@ -33,7 +36,9 @@ exports.createIssue = async (req, res) => {
         itemName: { $regex: `^${item.itemName}$`, $options: "i" },
       });
 
-      if (!stock || stock.issuedQty < item.issuedQty) {
+      console.log(`Checking stock for ${item.itemName}:`, stock);
+
+      if (!stock || stock.qty < item.issuedQty) {
         return res.status(400).json({
           message: `Insufficient stock for ${item.itemName}`,
         });
@@ -48,10 +53,24 @@ exports.createIssue = async (req, res) => {
     });
 
     for (const item of cleanItems) {
-      await MechanicalStock.findOneAndUpdate(
+      const stock = await MechanicalStock.findOne({
+        itemName: item.itemName
+      });
+      
+      console.log(`Updating stock for "${item.itemName}":`, {
+        found: !!stock,
+        currentQty: stock?.qty,
+        issuedQty: item.issuedQty,
+        newQty: stock ? stock.qty - item.issuedQty : 'N/A'
+      });
+
+      const result = await MechanicalStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { issuedQty: -item.issuedQty } }
+        { $inc: { qty: -item.issuedQty } },
+        { new: true }
       );
+      
+      console.log(`After update:`, result);
     }
 
     res.status(201).json(issue);
@@ -105,7 +124,7 @@ exports.deleteIssue = async (req, res) => {
     for (const item of issue.items) {
       await MechanicalStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { issuedQty: item.issuedQty } }
+        { $inc: { qty: item.issuedQty } }
       );
     }
 
