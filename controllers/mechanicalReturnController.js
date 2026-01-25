@@ -7,12 +7,14 @@ exports.createMechanicalReturn = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
+
   try {
     const { personName, location, returnDate, items } = req.body;
 
     if (!personName || !Array.isArray(items) || items.length === 0) {
       throw new Error("Invalid return data");
     }
+
 
     for (const item of items) {
       const returnQty = Number(item.quantity);
@@ -63,6 +65,7 @@ exports.createMechanicalReturn = async (req, res) => {
 
   } catch (err) {
     await session.abortTransaction();
+    console.error("MECHANICAL RETURN ERROR:", err);
     res.status(400).json({ message: err.message });
   } finally {
     session.endSession();

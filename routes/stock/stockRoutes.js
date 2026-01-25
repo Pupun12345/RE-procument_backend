@@ -42,7 +42,7 @@ router.post("/", async (req, res) => {
       },
       {
         $inc: { qty: Number(qty) },   // 🔑 DIRECT ADD
-        $setOnInsert: { unit },
+        $setOnInsert: { unit,itemName: itemName },
       },
       {
         upsert: true,

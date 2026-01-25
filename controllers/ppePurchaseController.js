@@ -60,9 +60,9 @@ exports.createPurchase = async (req, res) => {
         },
         {
           $inc: { qty: item.qty },
-          $setOnInsert: { unit: item.unit },
+          $setOnInsert: { unit: item.unit, itemName: item.itemName },
         },
-        { upsert: true }
+        { upsert: true, new: true } 
       );
     }
 
