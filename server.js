@@ -8,6 +8,9 @@ const authRoutes = require("./routes/authRoutes");
 const vendorRoutes = require("./routes/vendorRoutes");
 const itemRoutes = require("./routes/itemRoutes");
 const oldItemRoutes = require("./routes/olditemRoutes");
+const loanRoutes = require('./routes/loanRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
+const payrollRoutes = require('./routes/payrollRoutes');
 
 const app = express();
 
@@ -44,12 +47,14 @@ app.use("/api/returns/mechanical",require("./routes/return/mechanicalReturnRoute
 app.use("/api/returns/scaffolding",require("./routes/return/scaffoldingReturnRoutes"));
 app.use("/api/returns/old", require("./routes/return/oldReturnRoutes"));
 app.use("/api/returns", require("./routes/return/returnRoutes"));
-app.use("/api/employees", require("./routes/employeeRoutes"));
 app.use("/uploads", express.static("uploads"));
 app.use("/api/scaffolding/orders", require("./routes/order/ScaffoldingOrderRoutes"));
 app.use("/api/purchases/old",require("./routes/purchase/oldPurchaseRoutes"));
 app.use("/api/old-stock", require("./routes/stock/oldStockRoutes"));
 app.use("/api/issue/old", require("./routes/issue/oldIssueRoutes"));
+app.use('/api/loans', loanRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 /* ---- SERVER ---- */
 const PORT = process.env.PORT || 4000;

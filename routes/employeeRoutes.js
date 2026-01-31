@@ -6,6 +6,13 @@ const path = require("path");
 const {
   createEmployee,
   getEmployees,
+  getEmployeeByCode,
+  getEmployeeById,
+  updateEmployee,
+  deleteEmployee,
+  updateEmployeeShift,
+  bulkAssignShift,
+  getShiftStats
 } = require("../controllers/employeeController");
 
 // 🔹 Multer storage
@@ -25,5 +32,15 @@ const upload = multer({ storage });
 
 router.post("/", upload.single("employeePhoto"), createEmployee);
 router.get("/", getEmployees);
+
+// Shift Management Routes (place before :id routes to avoid conflicts)
+router.get("/shift/stats", getShiftStats);
+router.put("/shift/:employeeId", updateEmployeeShift);
+router.post("/shift/bulk-assign", bulkAssignShift);
+
+router.get("/code/:employeeCode", getEmployeeByCode);
+router.get("/:id", getEmployeeById);
+router.put("/:id", upload.single("employeePhoto"), updateEmployee);
+router.delete("/:id", deleteEmployee);
 
 module.exports = router;

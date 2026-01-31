@@ -106,7 +106,7 @@ exports.updateMechanicalReturn = async (req, res) => {
     for (const item of oldRecord.items) {
       await MechanicalStock.findOneAndUpdate(
         { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
-        { $inc: { issuedQty: -item.quantity } }
+        { $inc: { qty: -item.quantity } }
       );
     }
 
@@ -114,7 +114,7 @@ exports.updateMechanicalReturn = async (req, res) => {
     for (const item of req.body.items) {
       await MechanicalStock.findOneAndUpdate(
         { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
-        { $inc: { issuedQty: Number(item.quantity) } }
+        { $inc: { qty: Number(item.quantity) } }
       );
     }
 
@@ -142,7 +142,7 @@ exports.deleteMechanicalReturn = async (req, res) => {
     for (const item of record.items) {
       await MechanicalStock.findOneAndUpdate(
         { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
-        { $inc: { issuedQty: -item.quantity } }
+        { $inc: { qty: -item.quantity } }
       );
     }
 
