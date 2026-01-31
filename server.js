@@ -55,6 +55,9 @@ app.use("/api/issue/old", require("./routes/issue/oldIssueRoutes"));
 app.use('/api/loans', loanRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/reports/mechanical', require('./routes/mechanicalReportRoutes'));
+app.use('/api/reports/ppe', require('./routes/ppeReportRoutes'));
+app.use('/api/reports/scaffolding', require('./routes/scaffoldingReportRoutes'));
 
 /* ---- SERVER ---- */
 const PORT = process.env.PORT || 4000;
