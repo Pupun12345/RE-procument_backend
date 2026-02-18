@@ -42,6 +42,20 @@ const EmployeeSchema = new mongoose.Schema(
     address: { type: String, required: true },
 
     employeePhoto: String, // file path
+
+    // Shift Management
+    currentShift: { 
+      type: String, 
+      enum: ["day", "night"], 
+      default: "day" 
+    },
+    shiftDuration: { 
+      type: Number, 
+      default: 8 
+    },
+    lastShiftUpdate: { 
+      type: Date 
+    },
   },
   { timestamps: true }
 );

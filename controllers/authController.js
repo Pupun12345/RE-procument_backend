@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const crypto = require("crypto");
 const { sendOtpMail } = require("../utils/sendMail");
+
 // COOKIE SETTINGS
 const cookieOptions = {
   httpOnly: true,
@@ -39,6 +40,7 @@ exports.login = async (req, res) => {
       role: user.role,
       token: token, // ✅ Include token in response for frontend
     });
+
   } catch (err) {
     console.log(err);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -46,6 +48,7 @@ exports.login = async (req, res) => {
 };
 
 // ----------------------- LOGOUT -----------------------
+
 exports.logout = async (req, res) => {
   try {
     res.clearCookie("token", { ...cookieOptions, maxAge: 0 });
@@ -56,6 +59,7 @@ exports.logout = async (req, res) => {
 };
 
 // ----------------------- REGISTER -----------------------
+
 exports.register = async (req, res) => {
   try {
     const { firstname, lastname, email, password, role } = req.body;
@@ -80,11 +84,14 @@ exports.register = async (req, res) => {
       username: user.firstname,
       role: user.role,
     });
+
   } catch (err) {
     console.log(err);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+// ----------------------- FORGOT PASSWORD & RESET PASSWORD -----------------------
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
 
@@ -99,9 +106,9 @@ exports.forgotPassword = async (req, res) => {
   await user.save();
 
   await sendOtpMail(email, otp);
-
   res.json({ message: "OTP sent to email" });
 };
+
 exports.resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
 

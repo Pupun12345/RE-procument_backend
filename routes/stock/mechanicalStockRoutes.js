@@ -9,6 +9,7 @@ router.get("/", getStock);
 /* ================= ADD OLD MECHANICAL STOCK ================= */
 router.post("/", async (req, res) => {
   try {
+
     const { itemName, qty, unit } = req.body;
 
     // 🔐 Basic validation
@@ -34,6 +35,7 @@ router.post("/", async (req, res) => {
       message: "Old mechanical stock added successfully",
       stock: updated,
     });
+    
   } catch (err) {
     console.error("ADD OLD MECHANICAL STOCK ERROR:", err);
     res.status(500).json({ message: "Failed to add old mechanical stock" });
