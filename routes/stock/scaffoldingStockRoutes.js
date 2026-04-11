@@ -23,6 +23,12 @@ router.post("/", async (req, res) => {
 
     const calculatedWeight = Number(qty) * Number(puw);
 
+
+    //find order
+
+    const item = await ScaffoldingStock.findOne({itemName});
+    
+
     const updated = await ScaffoldingStock.findOneAndUpdate(
       {
         itemName: { $regex: `^${itemName}$`, $options: "i" },
@@ -33,6 +39,7 @@ router.post("/", async (req, res) => {
           weight: calculatedWeight, // 🔑 important
         },
         $setOnInsert: {
+           itemName: itemName,
           unit,
           puw: Number(puw),
         },
