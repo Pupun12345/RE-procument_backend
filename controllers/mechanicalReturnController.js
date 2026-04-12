@@ -19,10 +19,16 @@ exports.createMechanicalReturn = async (req, res) => {
       if (returnQty <= 0) throw new Error("Invalid return qty");
 
       // 1. Find ALL issues for this person that contain the item, sorted oldest first (FIFO)
+      // case insensitive match for person name
       const issues = await MechanicalIssue.find({
-        // issuedTo: personName, // Fixed: Must filter by the person
+        issuedTo: { $regex: `^${personName}$`, $options: "i" },
         "items.itemName": item.itemName
-      }).sort({ createdAt: 1 }).session(session); // 1 = Oldest first
+
+      })
+
+
+
+        .sort({ createdAt: 1 }).session(session); // 1 = Oldest first
 
       if (!issues || issues.length === 0) {
         throw new Error(`No issue history found for ${item.itemName} for ${personName}`);
@@ -38,17 +44,17 @@ exports.createMechanicalReturn = async (req, res) => {
         if (remainingInThisIssue > 0) {
           // How much can we return against this specific issue record?
           const qtyToReturnAgainstThisIssue = Math.min(returnQty, remainingInThisIssue);
-          
+
           issueItem.returnedQty += qtyToReturnAgainstThisIssue;
           returnQty -= qtyToReturnAgainstThisIssue; // Subtract from total left to process
-          
+
           await issue.save({ session });
         }
       }
 
       // 3. If after checking all records, we still have returnQty left over, they are returning too many!
       if (returnQty > 0) {
-         throw new Error(`Return quantity exceeds totally issued quantity for ${item.itemName}`);
+        throw new Error(`Return quantity exceeds totally issued quantity for ${item.itemName}`);
       }
 
       // 4. Update total stock

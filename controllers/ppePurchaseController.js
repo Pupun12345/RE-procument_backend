@@ -2,6 +2,11 @@ const PPEPurchase = require("../models/ppe/Purchase");
 const Stock = require("../models/ppe/Stock");
 
 /* ================= CREATE PURCHASE ================= */
+// 🛠️ Add this helper function at the top of your file (or inside the controller)
+const escapeRegex = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escapes special regex characters
+};
+
 exports.createPurchase = async (req, res) => {
   try {
     const {
@@ -53,10 +58,13 @@ exports.createPurchase = async (req, res) => {
 
     // 2️⃣ UPDATE STOCK (IN)
     for (const item of cleanItems) {
+      // 🟢 Escape the string before using it in Regex
+      const safeRegexName = escapeRegex(item.itemName);
+
       await Stock.findOneAndUpdate(
         {
-          // ✅ Case-insensitive item matching
-          itemName: { $regex: `^${item.itemName}$`, $options: "i" },
+          // ✅ Safe Case-insensitive item matching
+          itemName: { $regex: `^${safeRegexName}$`, $options: "i" },
         },
         {
           $inc: { qty: item.qty },
