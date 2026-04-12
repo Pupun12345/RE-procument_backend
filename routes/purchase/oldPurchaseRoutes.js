@@ -9,6 +9,8 @@ router.post("/", async (req, res) => {
   try {
     const purchase = await OldPurchase.create(req.body);
 
+    console.log("Created Old Purchase:", purchase);
+
     // 🔺 UPDATE STOCK
     for (const item of purchase.items) {
       if (!item.itemName || !item.qty) continue;

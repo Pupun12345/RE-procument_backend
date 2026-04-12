@@ -22,6 +22,7 @@ router.post("/", async (req, res) => {
         itemName: { $regex: `^${itemName}$`, $options: "i" },
       },
       {
+        itemName, 
         $inc: { qty: Number(qty) },   // 🔑 DIRECT ADD
         $setOnInsert: { unit },
       },

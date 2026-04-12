@@ -7,7 +7,6 @@ exports.createMechanicalReturn = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
-
   try {
     const { personName, location, returnDate, items } = req.body;
 
@@ -15,42 +14,47 @@ exports.createMechanicalReturn = async (req, res) => {
       throw new Error("Invalid return data");
     }
 
-
     for (const item of items) {
-      const returnQty = Number(item.quantity);
+      let returnQty = Number(item.quantity);
       if (returnQty <= 0) throw new Error("Invalid return qty");
 
-      // 🔍 Find latest issue for this person + item
-      const issue = await MechanicalIssue.findOne({
-        issuedTo: personName,
-        "items.itemName": item.itemName,
-      }).sort({ createdAt: -1 }).session(session);
+      // 1. Find ALL issues for this person that contain the item, sorted oldest first (FIFO)
+      const issues = await MechanicalIssue.find({
+        // issuedTo: personName, // Fixed: Must filter by the person
+        "items.itemName": item.itemName
+      }).sort({ createdAt: 1 }).session(session); // 1 = Oldest first
 
-      if (!issue) {
-        throw new Error(`No issue found for ${item.itemName}`);
+      if (!issues || issues.length === 0) {
+        throw new Error(`No issue history found for ${item.itemName} for ${personName}`);
       }
 
-      const issueItem = issue.items.find(
-        i => i.itemName === item.itemName
-      );
+      // 2. Iterate through past issues and distribute the return quantity
+      for (let issue of issues) {
+        if (returnQty <= 0) break; // Fully returned
 
-      const remaining =
-        issueItem.issuedQty - issueItem.returnedQty;
+        const issueItem = issue.items.find(i => i.itemName === item.itemName);
+        const remainingInThisIssue = issueItem.issuedQty - issueItem.returnedQty;
 
-      if (returnQty > remaining) {
-        throw new Error(
-          `Return exceeds remaining qty for ${item.itemName}`
-        );
+        if (remainingInThisIssue > 0) {
+          // How much can we return against this specific issue record?
+          const qtyToReturnAgainstThisIssue = Math.min(returnQty, remainingInThisIssue);
+          
+          issueItem.returnedQty += qtyToReturnAgainstThisIssue;
+          returnQty -= qtyToReturnAgainstThisIssue; // Subtract from total left to process
+          
+          await issue.save({ session });
+        }
       }
 
-      // 🔺 Update issue
-      issueItem.returnedQty += returnQty;
-      await issue.save({ session });
+      // 3. If after checking all records, we still have returnQty left over, they are returning too many!
+      if (returnQty > 0) {
+         throw new Error(`Return quantity exceeds totally issued quantity for ${item.itemName}`);
+      }
 
-      // 🔺 Update stock
+      // 4. Update total stock
       await MechanicalStock.findOneAndUpdate(
         { itemName: item.itemName },
-        { $inc: { qty: returnQty } },
+        { $inc: { qty: Number(item.quantity) } }, // Add original return amount to stock
         { session }
       );
     }
