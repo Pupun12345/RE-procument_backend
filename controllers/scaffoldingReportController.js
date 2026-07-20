@@ -36,14 +36,17 @@ exports.getScaffoldingFinalReport = async (req, res) => {
             itemName: item.itemName,
             unit: item.unit,
             totalIssued: 0,
+            totalIssuedWeight: 0,
             totalReturned: 0,
+            totalReturnedWeight: 0,
             inField: 0,
             currentStock: stockMap[itemKey]?.qty || 0,
           };
         }
         itemMap[itemKey].totalIssued += item.qty || 0;
-        // Track returned quantity from the issue itself
+        itemMap[itemKey].totalIssuedWeight += item.issuedWeight || 0;
         itemMap[itemKey].totalReturned += item.returnedQty || 0;
+        itemMap[itemKey].totalReturnedWeight += item.returnedWeight || 0;
       });
     });
 
@@ -56,14 +59,33 @@ exports.getScaffoldingFinalReport = async (req, res) => {
             itemName: item.itemName,
             unit: item.unit,
             totalIssued: 0,
+            totalIssuedWeight: 0,
             totalReturned: 0,
+            totalReturnedWeight: 0,
             inField: 0,
             currentStock: stockMap[itemKey]?.qty || 0,
           };
         }
-        // Add to total returned
         itemMap[itemKey].totalReturned += item.quantity || 0;
+        itemMap[itemKey].totalReturnedWeight += item.returnWeight || item.returnedWeight || 0;
       });
+    });
+
+    // Ensure all stock items appear in the report even if never issued/returned
+    stockItems.forEach((stockItem) => {
+      const itemKey = stockItem.itemName.toLowerCase().trim();
+      if (!itemMap[itemKey]) {
+        itemMap[itemKey] = {
+          itemName: stockItem.itemName,
+          unit: stockItem.unit,
+          totalIssued: 0,
+          totalIssuedWeight: 0,
+          totalReturned: 0,
+          totalReturnedWeight: 0,
+          inField: 0,
+          currentStock: stockItem.qty || 0,
+        };
+      }
     });
 
     // Calculate in field and net issued for each item
@@ -96,10 +118,12 @@ exports.getScaffoldingFinalReport = async (req, res) => {
     const summary = {
       totalItems: reportData.length,
       totalIssued: reportData.reduce((sum, item) => sum + item.totalIssued, 0),
+      totalIssuedWeight: reportData.reduce((sum, item) => sum + (item.totalIssuedWeight || 0), 0),
       totalReturned: reportData.reduce(
         (sum, item) => sum + item.totalReturned,
         0
       ),
+      totalReturnedWeight: reportData.reduce((sum, item) => sum + (item.totalReturnedWeight || 0), 0),
       totalInField: reportData.reduce((sum, item) => sum + item.inField, 0),
       totalStock: reportData.reduce(
         (sum, item) => sum + item.currentStock,

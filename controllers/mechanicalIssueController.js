@@ -18,7 +18,7 @@ exports.createIssue = async (req, res) => {
     }
 
     const cleanItems = items
-      .filter((i) => i.itemName && Number(i.issuedQty) > 0 && i.unit)
+      .filter((i) => i.itemName && Number(i.issuedQty) > 0)
       .map((i) => ({
         itemName: i.itemName.trim(),
         unit: i.unit,
@@ -65,7 +65,7 @@ exports.createIssue = async (req, res) => {
       });
 
       const result = await MechanicalStock.findOneAndUpdate(
-        { itemName: item.itemName },
+        { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
         { $inc: { qty: -item.issuedQty } },
         { new: true }
       );

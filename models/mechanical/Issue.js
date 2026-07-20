@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const ItemSchema = new mongoose.Schema({
   itemName: { type: String, required: true },
-  unit: { type: String, required: true },
+  unit: { type: String, default: "" },
 
   issuedQty: { type: Number, required: true },
   returnedQty: { type: Number, default: 0 }, // 🔥 TRACK RETURN
