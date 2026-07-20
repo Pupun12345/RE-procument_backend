@@ -1,6 +1,16 @@
 const PPEIssue = require("../models/ppe/issue");
 const PPEStock = require("../models/ppe/Stock");
 
+const normalizeItemName = (value = "") =>
+  String(value).trim().replace(/\s+/g, " ").toLowerCase();
+
+const findStockByItemName = async (itemName) => {
+  const targetName = normalizeItemName(itemName);
+  const stockItems = await PPEStock.find({}).lean();
+
+  return stockItems.find((stock) => normalizeItemName(stock.itemName) === targetName) || null;
+};
+
 /* ================= CREATE PPE ISSUE ================= */
 
 exports.createPPEIssue = async (req, res) => {
@@ -18,10 +28,10 @@ exports.createPPEIssue = async (req, res) => {
     }
 
     const cleanItems = items
-      .filter(i => i.itemName && Number(i.qty) > 0 && i.unit)
+      .filter(i => i.itemName && Number(i.qty) > 0)
       .map(i => ({
         itemName: i.itemName.trim(),
-        unit: i.unit,
+        unit: i.unit || "",
         qty: Number(i.qty),
       }));
 
@@ -29,22 +39,24 @@ exports.createPPEIssue = async (req, res) => {
       return res.status(400).json({ message: "Invalid items data" });
     }
 
-    // ✅ FIXED stock validation
+    const resolvedStockItems = [];
+
+    // Stock validation
     for (const item of cleanItems) {
-      const stock = await PPEStock.findOne({
-        itemName: { $regex: `^${item.itemName}$`, $options: "i" },
-      });
+      const stock = await findStockByItemName(item.itemName);
 
       console.log("ISSUE ITEM:", item.itemName);
       console.log("STOCK FOUND:", stock);
 
-      if (!stock || stock.qty < item.qty) {
+      if (!stock || (stock.qty || 0) < item.qty) {
         return res.status(400).json({
           message: `Insufficient stock for ${item.itemName}`,
-          available: stock ? stock.qty : 0,
+          available: stock ? stock.qty || 0 : 0,
           requested: item.qty,
         });
       }
+
+      resolvedStockItems.push({ stockId: stock._id, qty: item.qty });
     }
 
     const issue = await PPEIssue.create({
@@ -54,11 +66,10 @@ exports.createPPEIssue = async (req, res) => {
       items: cleanItems,
     });
 
-    for (const item of cleanItems) {
-      await PPEStock.findOneAndUpdate(
-        { itemName: { $regex: `^${item.itemName}$`, $options: "i" } },
-        { $inc: { qty: -item.qty } }
-      );
+    for (const item of resolvedStockItems) {
+      await PPEStock.findByIdAndUpdate(item.stockId, {
+        $inc: { qty: -item.qty },
+      });
     }
 
     res.status(201).json(issue);
@@ -113,10 +124,12 @@ exports.deletePPEIssue = async (req, res) => {
 
     // Restore stock
     for (const item of issue.items) {
-      await PPEStock.findOneAndUpdate(
-        { itemName: item.itemName },
-        { $inc: { qty: item.qty } }
-      );
+      const stock = await findStockByItemName(item.itemName);
+      if (stock) {
+        await PPEStock.findByIdAndUpdate(stock._id, {
+          $inc: { qty: item.qty },
+        });
+      }
     }
 
     await issue.deleteOne();
