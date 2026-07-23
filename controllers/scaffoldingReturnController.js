@@ -37,26 +37,27 @@ const issueItem = issue.items.find(
       }
 
       const stock = await ScaffoldingStock.findOne({
-        itemName: item.itemName,
+        itemName: { $regex: `^\\s*${item.itemName.trim().replace(/\s+/g, "\\s+")}\\s*$`, $options: "i" },
       }).session(session);
 
-      const returnWeight = returnQty * stock.puw;
+      // use issue item's unitWeight as source of truth for puw
+      const puw = issueItem.unitWeight || (stock ? stock.puw : 0);
+      const returnWeight = returnQty * puw;
 
-      // 🔺 Update stock
-      await ScaffoldingStock.updateOne(
-        { itemName: item.itemName },
-        {
-          $inc: {
-            qty: returnQty,
-            weight: returnWeight,
-          },
-        },
-        { session }
-      );
+      if (stock) {
+        await ScaffoldingStock.updateOne(
+          { _id: stock._id },
+          { $inc: { qty: returnQty, weight: returnWeight } },
+          { session }
+        );
+      }
 
       // 🔺 Update issue tracking
       issueItem.returnedQty += returnQty;
       issueItem.returnedWeight += returnWeight;
+
+      // 🔺 Attach computed returnWeight to item for saving
+      item.returnWeight = returnWeight;
     }
 
     await issue.save({ session });
@@ -69,6 +70,7 @@ const issueItem = issue.items.find(
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
+    console.error("CREATE RETURN ERROR:", err.message);
     res.status(400).json({ message: err.message });
   }
 };
@@ -76,7 +78,9 @@ const issueItem = issue.items.find(
 /* ================= GET ALL RETURNS ================= */
 exports.getScaffoldingReturns = async (req, res) => {
   try {
-    const data = await ScaffoldingReturn.find().sort({ createdAt: -1 });
+    const data = await ScaffoldingReturn.find()
+      .populate("issueId", "issuedTo issueDate")
+      .sort({ createdAt: -1 });
     res.json(data);
   } catch (err) {
     console.error("GET SCAFFOLDING RETURNS ERROR:", err);
@@ -101,40 +105,30 @@ exports.deleteScaffoldingReturn = async (req, res) => {
     }
 
     // 🔄 Rollback stock
+    const issue = await ScaffoldingIssue.findById(record.issueId).session(session);
+
     for (const item of record.items) {
-      const issue = await ScaffoldingIssue.findById(record.issueId).session(
-        session
-      );
-      if (!issue) continue;
-
-const issueItem = issue.items.find(
-  (i) =>
-    i.itemName.trim().toLowerCase() ===
-    item.itemName.trim().toLowerCase()
-);
-      if (!issueItem) continue;
-
       const qty = Number(item.quantity);
-      const stock = await ScaffoldingStock.findOne({
-        itemName: item.itemName,
-      }).session(session);
-      const weight = qty * stock.puw;
+      const weight = Number(item.returnWeight) || 0;
 
-      // 🔄 rollback issue
-      issueItem.returnedQty -= qty;
-      issueItem.returnedWeight -= weight;
-
-      // 🔄 rollback stock
       await ScaffoldingStock.updateOne(
-        { itemName: item.itemName },
-        {
-          $inc: { qty: -qty, weight: -weight },
-        },
+        { itemName: { $regex: `^\\s*${item.itemName.trim().replace(/\s+/g, "\\s+")}\\s*$`, $options: "i" } },
+        { $inc: { qty: -qty, weight: -weight } },
         { session }
       );
 
-      await issue.save({ session });
+      if (issue) {
+        const issueItem = issue.items.find(
+          (i) => i.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase()
+        );
+        if (issueItem) {
+          issueItem.returnedQty -= qty;
+          issueItem.returnedWeight -= weight;
+        }
+      }
     }
+
+    if (issue) await issue.save({ session });
 
     await record.deleteOne({ session });
 
@@ -182,30 +176,19 @@ exports.updateScaffoldingReturn = async (req, res) => {
 
     // 2️⃣ ONLY touch stock & items if items are provided
     if (Array.isArray(items) && items.length > 0) {
-      // 🔻 rollback OLD stock
+      // 🔻 rollback OLD stock using stored returnWeight
       for (const oldItem of oldReturn.items) {
-        const stock = await ScaffoldingStock.findOne({
-          itemName: { $regex: `^${oldItem.itemName}$`, $options: "i" },
-        }).session(session);
-
-        if (!stock) continue;
-
         const qty = Number(oldItem.quantity);
-        const weight = qty * stock.puw;
+        const weight = Number(oldItem.returnWeight) || 0;
 
-        await ScaffoldingStock.findOneAndUpdate(
-          { itemName: stock.itemName },
-          {
-            $inc: {
-              qty: -qty,
-              weight: -weight,
-            },
-          },
+        await ScaffoldingStock.updateOne(
+          { itemName: { $regex: `^\\s*${oldItem.itemName.trim().replace(/\s+/g, "\\s+")}\\s*$`, $options: "i" } },
+          { $inc: { qty: -qty, weight: -weight } },
           { session }
         );
       }
 
-      // 🔺 apply NEW stock
+      // 🔺 apply NEW stock and compute returnWeight
       for (const newItem of items) {
         const stock = await ScaffoldingStock.findOne({
           itemName: { $regex: `^${newItem.itemName}$`, $options: "i" },
@@ -215,15 +198,11 @@ exports.updateScaffoldingReturn = async (req, res) => {
 
         const qty = Number(newItem.quantity);
         const weight = qty * stock.puw;
+        newItem.returnWeight = weight;
 
-        await ScaffoldingStock.findOneAndUpdate(
+        await ScaffoldingStock.updateOne(
           { itemName: stock.itemName },
-          {
-            $inc: {
-              qty: qty,
-              weight: weight,
-            },
-          },
+          { $inc: { qty, weight } },
           { session }
         );
       }
