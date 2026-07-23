@@ -3,42 +3,22 @@ const ScaffoldingOrder = require("../models/scaffolding/ScaffoldingOrder");
 /* ================= CREATE ORDER ================= */
 exports.createOrder = async (req, res) => {
   try {
-    const {
-      supervisor,
-      employeeId,
-      issueDate,
-      location,
-      materials,
-    } = req.body;
+    const { orderManager, workOrderNumber, fromDate, toDate, location, materials } = req.body;
 
-    if (
-      !supervisor ||
-      !employeeId ||
-      !issueDate ||
-      !location ||
-      !Array.isArray(materials) ||
-      materials.length === 0
-    ) {
+    if (!orderManager || !fromDate || !toDate || !location || !Array.isArray(materials) || materials.length === 0) {
       return res.status(400).json({ message: "Invalid order data" });
     }
 
     for (const m of materials) {
       if (!m.material || !m.quantity || !m.provider) {
-        return res.status(400).json({
-          message: "Invalid material row",
-        });
+        return res.status(400).json({ message: "Invalid material row" });
       }
     }
 
     const orderNo = `ORD-${new Date().getFullYear()}-${Date.now()}`;
 
     const saved = await ScaffoldingOrder.create({
-      orderNo,
-      supervisor,
-      employeeId,
-      issueDate,
-      location,
-      materials,
+      orderNo, orderManager, workOrderNumber, fromDate, toDate, location, materials,
     });
 
     res.status(201).json(saved);
@@ -57,6 +37,8 @@ exports.getOrders = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch orders" });
   }
 };
+
+/* ================= DELETE ORDER ================= */
 exports.deleteOrder = async (req, res) => {
   try {
     await ScaffoldingOrder.findByIdAndDelete(req.params.id);
@@ -65,27 +47,20 @@ exports.deleteOrder = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+
 /* ================= UPDATE ORDER ================= */
 exports.updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { supervisor, employeeId, issueDate, location, materials } = req.body;
+    const { orderManager, workOrderNumber, fromDate, toDate, location, materials } = req.body;
 
     const updated = await ScaffoldingOrder.findByIdAndUpdate(
       id,
-      {
-        supervisor,
-        employeeId,
-        issueDate,
-        location,
-        materials,
-      },
-      { new: true } // 🔥 RETURN UPDATED DOC
+      { orderManager, workOrderNumber, fromDate, toDate, location, materials },
+      { new: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+    if (!updated) return res.status(404).json({ message: "Order not found" });
 
     res.json(updated);
   } catch (err) {
